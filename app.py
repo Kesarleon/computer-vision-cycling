@@ -1,201 +1,147 @@
 import streamlit as st
 import cv2
-import numpy as np
-import tensorflow as tf
 import os
 import tempfile
-from collections import deque
+import time
+import tensorflow as tf
+from src.video_processing import process_video
 
 # --- Constantes y Configuración ---
 MODEL_PATH = 'bicycle_detection_model.h5'
 IMG_HEIGHT, IMG_WIDTH = 128, 128
-DETECTION_THRESHOLD = 0.5  # Umbral para considerar una detección como positiva
 
 # --- Carga del Modelo ---
-@st.cache(allow_output_mutation=True)
+@st.cache_resource
 def load_detection_model():
-    """Carga el modelo de detección de Keras."""
+    """Carga el modelo de detección de Keras. Cacheado para alto rendimiento."""
     if not os.path.exists(MODEL_PATH):
         return None
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
+        # Usar st.spinner para mostrar que el modelo se está cargando
+        with st.spinner("Cargando modelo de IA..."):
+            model = tf.keras.models.load_model(MODEL_PATH)
         return model
     except Exception as e:
-        st.error(f"Error al cargar el modelo: {e}")
+        st.error(f"Error crítico al cargar el modelo: {e}")
         return None
 
-# --- Lógica de Detección y Conteo ---
-class CentroidTracker:
-    def __init__(self, max_disappeared=50):
-        self.next_object_id = 0
-        self.objects = {}
-        self.disappeared = {}
-        self.max_disappeared = max_disappeared
-
-    def register(self, centroid):
-        self.objects[self.next_object_id] = centroid
-        self.disappeared[self.next_object_id] = 0
-        self.next_object_id += 1
-
-    def deregister(self, object_id):
-        del self.objects[object_id]
-        del self.disappeared[object_id]
-
-    def update(self, rects):
-        if len(rects) == 0:
-            for object_id in list(self.disappeared.keys()):
-                self.disappeared[object_id] += 1
-                if self.disappeared[object_id] > self.max_disappeared:
-                    self.deregister(object_id)
-            return self.objects
-
-        input_centroids = np.zeros((len(rects), 2), dtype="int")
-        for (i, (startX, startY, endX, endY)) in enumerate(rects):
-            cX = int((startX + endX) / 2.0)
-            cY = int((startY + endY) / 2.0)
-            input_centroids[i] = (cX, cY)
-
-        if len(self.objects) == 0:
-            for i in range(len(input_centroids)):
-                self.register(input_centroids[i])
-        else:
-            object_ids = list(self.objects.keys())
-            object_centroids = list(self.objects.values())
-
-            D = np.linalg.norm(np.array(object_centroids)[:, np.newaxis] - input_centroids, axis=2)
-            rows = D.min(axis=1).argsort()
-            cols = D.argmin(axis=1)[rows]
-
-            used_rows = set()
-            used_cols = set()
-
-            for (row, col) in zip(rows, cols):
-                if row in used_rows or col in used_cols:
-                    continue
-
-                object_id = object_ids[row]
-                self.objects[object_id] = input_centroids[col]
-                self.disappeared[object_id] = 0
-
-                used_rows.add(row)
-                used_cols.add(col)
-
-            unused_rows = set(range(D.shape[0])).difference(used_rows)
-            unused_cols = set(range(D.shape[1])).difference(used_cols)
-
-            if D.shape[0] >= D.shape[1]:
-                for row in unused_rows:
-                    object_id = object_ids[row]
-                    self.disappeared[object_id] += 1
-                    if self.disappeared[object_id] > self.max_disappeared:
-                        self.deregister(object_id)
-            else:
-                for col in unused_cols:
-                    self.register(input_centroids[col])
-        return self.objects
-
-def detect_bicycles(frame, model):
-    """Detecta bicicletas en un fotograma usando el modelo CNN."""
-    img = cv2.resize(frame, (IMG_WIDTH, IMG_HEIGHT))
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
-    img_array = tf.expand_dims(img_array, 0) / 255.0
-
-    prediction = model.predict(img_array)[0][0]
-
-    if prediction > DETECTION_THRESHOLD:
-        # Simula un bounding box si se detecta una bicicleta
-        # En un modelo real de detección, obtendríamos las coordenadas del BBox
-        h, w, _ = frame.shape
-        return [(int(w*0.25), int(h*0.25), int(w*0.75), int(h*0.75))]
-    return []
-
 # --- Interfaz de Streamlit ---
-st.set_page_config(page_title="Contador de Viajes Ciclistas", layout="wide")
+st.set_page_config(page_title="Análisis de Video: Conteo de Ciclistas", layout="wide", page_icon="🚴")
 
-st.title("🚴‍♀️ Contador de Viajes de Ciclistas")
-st.markdown("Sube un video para analizar y contar los ciclistas que cruzan la línea central.")
+# --- Barra Lateral (Sidebar) ---
+with st.sidebar:
+    st.title("🚴 Análisis de Video IA")
+    st.info("Esta aplicación utiliza un modelo de IA para detectar y contar ciclistas en un video.")
 
-model = load_detection_model()
+    model = load_detection_model()
 
-if model is None:
-    st.error("No se pudo cargar el modelo `bicycle_detection_model.h5`. Asegúrate de que el archivo existe en el directorio raíz del proyecto. Puedes generarlo ejecutando el notebook `notebooks/training.ipynb`.")
-else:
-    st.success("✅ Modelo de detección cargado correctamente.")
+    if model is None:
+        st.error(f"Modelo no encontrado en `{MODEL_PATH}`. Por favor, ejecuta el notebook de entrenamiento.")
+        st.stop()
+    else:
+        st.success("Modelo cargado.")
 
-uploaded_file = st.file_uploader("Elige un archivo de video", type=["mp4", "avi", "mov"])
+    st.header("Configuración")
+    uploaded_file = st.file_uploader(
+        "Sube tu video",
+        type=["mp4", "avi", "mov"],
+        help="Sube un video para que la IA lo analice."
+    )
 
-if uploaded_file is not None:
-    tfile = tempfile.NamedTemporaryFile(delete=False)
+    detection_threshold = st.slider(
+        "Umbral de Confianza de Detección",
+        min_value=0.1, max_value=0.9, value=0.5, step=0.05,
+        help="Un valor más alto significa que la IA debe estar más segura para detectar una bicicleta. Ayuda a reducir falsos positivos."
+    )
+
+    # Placeholder para la línea de conteo, se actualizará después de cargar el video
+    line_position_percent = st.slider(
+        "Posición de la Línea de Conteo (Vertical)",
+        min_value=10, max_value=90, value=50, step=5,
+        help="Define la línea virtual que un ciclista debe cruzar para ser contado. Se mide como un porcentaje desde la parte superior del video."
+    )
+
+    process_button = st.button("🚀 Iniciar Análisis")
+
+# --- Área Principal ---
+st.title("Panel de Control de Conteo de Ciclistas")
+
+if uploaded_file is None:
+    st.warning("Por favor, sube un archivo de video usando el panel de la izquierda para comenzar.")
+
+if uploaded_file and process_button:
+    # Guardar archivo subido a un archivo temporal
+    tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(uploaded_file.read())
     video_path = tfile.name
 
-    st.video(video_path)
+    # Obtener dimensiones del video para la línea de conteo
+    cap = cv2.VideoCapture(video_path)
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    line_y = int(h * (line_position_percent / 100))
 
-    if st.button("Procesar Video para Contar Ciclistas"):
-        with st.spinner("Analizando video... Esto puede tardar unos momentos."):
-            cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                st.error("Error al abrir el video.")
-            else:
-                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # Crear placeholders para la salida
+    st_frame = st.empty()
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Conteo Actual", "0")
+    with col2:
+        st.metric("Tiempo de Procesamiento", "0s")
+    with col3:
+        st.metric("Progreso", "0%")
 
-                # Línea de conteo en el centro
-                line_y = h // 2
+    progress_bar = st.progress(0)
 
-                tracker = CentroidTracker()
-                tracked_paths = {}
-                bicycle_count = 0
-                counted_ids = set()
+    def progress_callback(fraction):
+        # Actualiza la métrica de progreso
+        col3.metric("Progreso", f"{int(fraction*100)}%")
+        progress_bar.progress(fraction)
 
-                st_frame = st.empty()
+    try:
+        start_time = time.time()
 
-                while cap.isOpened():
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
+        processor = process_video(
+            video_path=video_path,
+            model=model,
+            line_y=line_y,
+            detection_threshold=detection_threshold,
+            img_width=IMG_WIDTH,
+            img_height=IMG_HEIGHT,
+            progress_callback=progress_callback
+        )
 
-                    rects = detect_bicycles(frame, model)
-                    objects = tracker.update(rects)
+        final_count = 0
+        for frame, count in processor:
+            # Actualizar métricas en tiempo real
+            col1.metric("Conteo Actual", str(count))
+            elapsed_time = f"{time.time() - start_time:.2f}s"
+            col2.metric("Tiempo de Procesamiento", elapsed_time)
 
-                    for (object_id, centroid) in objects.items():
-                        # Guardar el historial de posiciones
-                        if object_id not in tracked_paths:
-                            tracked_paths[object_id] = deque(maxlen=30)
+            # Mostrar el fotograma procesado
+            st_frame.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", use_column_width=True)
+            final_count = count
 
-                        tracked_paths[object_id].append(centroid)
+        end_time = time.time()
+        total_time = end_time - start_time
 
-                        # Dibujar el centroide y el ID
-                        text = f"ID {object_id}"
-                        cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                        cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
+        # Estado final
+        st.success(f"¡Análisis completado en {total_time:.2f} segundos!")
+        col1.metric("Conteo Final", str(final_count))
+        col2.metric("Tiempo Total", f"{total_time:.2f}s")
+        col3.metric("Progreso", "100%")
+        progress_bar.progress(1.0)
 
-                        # Lógica de cruce de línea
-                        if len(tracked_paths[object_id]) > 1:
-                            prev_centroid = tracked_paths[object_id][-2]
-                            # Si el objeto no ha sido contado y cruza la línea
-                            if prev_centroid[1] < line_y and centroid[1] >= line_y and object_id not in counted_ids:
-                                bicycle_count += 1
-                                counted_ids.add(object_id)
-                                cv2.line(frame, (0, line_y), (w, line_y), (0, 255, 0), 4) # Línea verde al cruzar
-                            elif prev_centroid[1] > line_y and centroid[1] <= line_y and object_id not in counted_ids:
-                                bicycle_count += 1
-                                counted_ids.add(object_id)
-                                cv2.line(frame, (0, line_y), (w, line_y), (0, 255, 0), 4) # Línea verde al cruzar
+        st.balloons()
 
-                    # Dibujar la línea de conteo
-                    cv2.line(frame, (0, line_y), (w, line_y), (0, 0, 255), 2)
-
-                    # Mostrar el conteo en el video
-                    cv2.putText(frame, f"Conteo: {bicycle_count}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-
-                    # Mostrar el fotograma procesado
-                    st_frame.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
-
-                cap.release()
-                st.success("¡Análisis de video completado!")
-                st.metric("Total de Viajes de Ciclistas Contados", bicycle_count)
-
-    # Limpiar archivo temporal
-    if os.path.exists(video_path):
-        os.remove(video_path)
+    except IOError as e:
+        st.error(f"Error al procesar el video: {e}")
+    except Exception as e:
+        st.error(f"Ocurrió un error inesperado: {e}")
+    finally:
+        # Limpiar archivo temporal
+        if os.path.exists(video_path):
+            os.remove(video_path)
+else:
+    st.info("Configure los parámetros en la barra lateral y haga clic en 'Iniciar Análisis'.")
