@@ -1,85 +1,85 @@
 # Conteo de Viajes de Ciclistas con Visión por Computadora
 
-Este proyecto implementa una solución de visión por computadora para detectar y contar ciclistas en un video. Utiliza un modelo de Red Neuronal Convolucional (CNN) entrenado con TensorFlow/Keras y una aplicación web construida con Streamlit para la interacción del usuario.
+Este proyecto ofrece una solución profesional y atractiva para detectar y contar ciclistas en videos utilizando visión por computadora. La herramienta se presenta a través de una aplicación web interactiva construida con Streamlit, respaldada por un modelo de Red Neuronal Convolucional (CNN) entrenado con TensorFlow/Keras.
 
-## 🎯 Objetivo
+<!-- ![Demostración de la Aplicación](URL_A_LA_IMAGEN_DE_DEMO.png) -->
+*<p align="center">Un marcador de posición para una futura demostración de la aplicación.</p>*
 
-El objetivo es proporcionar una herramienta que pueda analizar un archivo de video para contar cuántos ciclistas cruzan una línea virtual predefinida. Este tipo de análisis es valioso para la planificación del tráfico urbano, estudios de movilidad y la promoción de infraestructura para ciclistas.
+## ✨ Características Principales
 
-## 📂 Estructura del Repositorio
+- **Interfaz de Usuario Interactiva:** Una aplicación web moderna y fácil de usar donde puedes subir tus propios videos.
+- **Detección por IA:** Utiliza un modelo de TensorFlow/Keras para identificar ciclistas en cada fotograma.
+- **Seguimiento de Objetos:** Implementa un tracker de centroides para seguir a los ciclistas detectados a través del tiempo.
+- **Conteo por Línea Virtual:** Cuenta automáticamente a los ciclistas que cruzan una línea virtual en el video.
+- **Configuración Personalizable:**
+  - **Ajuste del Umbral de Detección:** Controla la sensibilidad del modelo de IA para reducir falsos positivos.
+  - **Línea de Conteo Dinámica:** Ajusta la posición vertical de la línea de conteo directamente desde la interfaz.
+- **Panel de Resultados en Tiempo Real:** Visualiza el conteo, el tiempo de procesamiento y el progreso del análisis mientras se ejecuta.
+
+## 📂 Estructura del Repositorio Profesional
+
+El código ha sido refactorizado para seguir las mejores prácticas, separando la lógica de la interfaz de usuario para mayor claridad y mantenimiento.
 
 ```
 bicycle-trip-counter/
 │
-├── app.py                  # Aplicación web de Streamlit
+├── app.py                  # Aplicación web principal de Streamlit (UI)
+├── src/
+│   ├── __init__.py
+│   ├── tracker.py          # Módulo para el seguimiento de centroides
+│   └── video_processing.py # Lógica principal de procesamiento de video
 ├── data/
-│   └── .gitkeep            # Directorio para videos y frames
+│   └── .gitkeep            # Directorio para videos de entrada
 ├── notebooks/
-│   └── training.ipynb      # Notebook para el preprocesamiento y entrenamiento del modelo
+│   └── training.ipynb      # Notebook para entrenar el modelo de detección
 ├── requirements.txt        # Dependencias de Python
-├── bicycle_detection_model.h5  # (Generado por el notebook) Modelo entrenado
-└── README.md               # Documentación del proyecto
+├── bicycle_detection_model.h5  # (Generado) Modelo entrenado
+└── README.md               # Esta documentación
 ```
-
-## 🛠️ Requisitos Previos
-
-- Python 3.8+
-- `pip` para la gestión de paquetes
 
 ## 🚀 Cómo Empezar
 
-### 1. Clonar el Repositorio
+### 1. Clonar y Preparar el Entorno
 
 ```bash
 git clone <URL-del-repositorio>
 cd bicycle-trip-counter
-```
-
-### 2. Instalar Dependencias
-
-Se recomienda crear un entorno virtual para aislar las dependencias del proyecto.
-
-```bash
+# Se recomienda crear un entorno virtual
 python -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
 
-Instala las librerías necesarias:
+### 2. Instalar Dependencias
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Entrenamiento del Modelo (Opcional)
+### 3. Generar el Modelo (Si no existe)
 
-El repositorio está diseñado para funcionar con un modelo pre-entrenado que puedes generar. Si deseas entrenar el modelo con tu propio dataset, sigue estos pasos:
+El modelo `bicycle_detection_model.h5` es necesario para ejecutar la aplicación. Si no lo tienes, puedes generarlo ejecutando el notebook de Jupyter:
+- Abre y ejecuta `notebooks/training.ipynb`.
+- El notebook incluye una celda de simulación para generar datos de entrenamiento de demostración, por lo que no se requiere etiquetado manual para empezar.
+- Al finalizar, el modelo se guardará en el directorio raíz.
 
-1.  **Prepara tu Dataset:**
-    *   Coloca tus archivos de video (`.mp4`, `.avi`) en el directorio `data/`.
-    *   El notebook `notebooks/training.ipynb` contiene funciones para extraer fotogramas de estos videos.
+### 4. Ejecutar la Aplicación
 
-2.  **Etiqueta tus Datos:**
-    *   Después de extraer los fotogramas, necesitas etiquetarlos. El notebook genera un archivo `labels.csv` con las columnas `frame` y `has_bicycle`. Deberás llenar este archivo manualmente (0 para no-bicicleta, 1 para bicicleta).
-
-3.  **Ejecuta el Notebook de Entrenamiento:**
-    *   Abre y ejecuta el notebook `notebooks/training.ipynb` utilizando Jupyter.
-    *   Este proceso cargará los fotogramas y las etiquetas, entrenará el modelo de CNN y guardará el artefacto resultante como `bicycle_detection_model.h5` en el directorio raíz.
-
-### 4. Ejecutar la Aplicación Streamlit
-
-Una vez que tengas el modelo `bicycle_detection_model.h5` (ya sea que lo hayas entrenado tú mismo o lo hayas descargado), puedes iniciar la aplicación.
+Con el modelo en su lugar, inicia la aplicación Streamlit:
 
 ```bash
 streamlit run app.py
 ```
 
-La aplicación se abrirá en tu navegador web. Sube un video y la aplicación procesará el metraje para contar los ciclistas que cruzan la línea virtual y mostrará el resultado.
+Tu navegador se abrirá con la aplicación.
 
-## 🤖 Cómo Funciona
+## 🤖 Cómo Usar la Aplicación
 
-1.  **Detección:** El modelo de CNN analiza cada fotograma del video para detectar la presencia de una bicicleta.
-2.  **Seguimiento (Tracking):** Se utiliza un tracker simple para seguir los objetos detectados a través de fotogramas consecutivos.
-3.  **Conteo:** Se define una línea horizontal en el centro del fotograma. Un "viaje" se cuenta cuando el centroide de un objeto rastreado (bicicleta) cruza esta línea de arriba hacia abajo o de abajo hacia arriba.
+1.  **Sube un Video:** Usa el cargador de archivos en la barra lateral izquierda.
+2.  **Ajusta los Parámetros:**
+    - **Umbral de Confianza:** Desliza para ajustar la sensibilidad de la detección. Un valor más alto requiere que el modelo esté más seguro.
+    - **Posición de la Línea:** Desliza para cambiar la altura de la línea roja de conteo en el video.
+3.  **Inicia el Análisis:** Haz clic en el botón "🚀 Iniciar Análisis".
+4.  **Observa los Resultados:** El video se procesará y mostrará en el panel principal. Las métricas de conteo y progreso se actualizarán en tiempo real.
 
 ## 🤝 Contribuciones
 
