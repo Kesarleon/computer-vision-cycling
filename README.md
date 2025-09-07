@@ -21,11 +21,10 @@ Este proyecto ofrece una solución profesional y atractiva para detectar y conta
 El código ha sido refactorizado para seguir las mejores prácticas, separando la lógica de la interfaz de usuario para mayor claridad y mantenimiento.
 
 ```
-bicycle-trip-counter/
-│
+.
+├── .gitignore
 ├── app.py                  # Aplicación web principal de Streamlit (UI)
 ├── src/
-│   ├── __init__.py
 │   ├── tracker.py          # Módulo para el seguimiento de centroides
 │   └── video_processing.py # Lógica principal de procesamiento de video
 ├── data/
@@ -33,18 +32,22 @@ bicycle-trip-counter/
 ├── notebooks/
 │   └── training.ipynb      # Notebook para entrenar el modelo de detección
 ├── requirements.txt        # Dependencias de Python
-├── bicycle_detection_model.h5  # (Generado) Modelo entrenado
+├── packages.txt            # Dependencias del sistema para Streamlit Cloud
 └── README.md               # Esta documentación
 ```
+*Nota: El modelo `bicycle_detection_model.h5` se genera al ejecutar el notebook y debe gestionarse con Git LFS.*
 
 ## 🚀 Cómo Empezar
 
 ### 1. Clonar y Preparar el Entorno
 
+Después de clonar el repositorio, se recomienda crear un entorno virtual:
 ```bash
-git clone <URL-del-repositorio>
-cd bicycle-trip-counter
-# Se recomienda crear un entorno virtual
+# Clona el repositorio (si aún no lo has hecho)
+# git clone <URL-del-repositorio>
+# cd <nombre-del-repositorio>
+
+# Crea y activa el entorno virtual
 python -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
@@ -74,48 +77,12 @@ Tu navegador se abrirá con la aplicación.
 
 ## 🤖 Cómo Usar la Aplicación
 
-1.  **Sube un Video:** Usa el cargador de archivos en la barra lateral izquierda.
+1.  **Elige una Fuente de Video:** En la barra lateral, selecciona si quieres subir un archivo o usar una URL.
 2.  **Ajusta los Parámetros:**
-    - **Umbral de Confianza:** Desliza para ajustar la sensibilidad de la detección. Un valor más alto requiere que el modelo esté más seguro.
-    - **Posición de la Línea:** Desliza para cambiar la altura de la línea roja de conteo en el video.
-3.  **Inicia el Análisis:** Haz clic en el botón "🚀 Iniciar Análisis".
-4.  **Observa los Resultados:** El video se procesará y mostrará en el panel principal. Las métricas de conteo y progreso se actualizarán en tiempo real.
-
-## ☁️ Despliegue en Streamlit Cloud
-
-Puedes desplegar esta aplicación como una demo pública en Streamlit Cloud. Sigue estos pasos:
-
-### 1. Preparar el Repositorio para Archivos Grandes
-
-El archivo del modelo (`bicycle_detection_model.h5`) es demasiado grande para ser gestionado directamente por Git. Necesitarás usar **Git LFS** (Large File Storage).
-
-```bash
-# Instala Git LFS en tu sistema (hazlo una sola vez)
-# En Debian/Ubuntu: sudo apt-get install git-lfs
-# En macOS: brew install git-lfs
-git lfs install
-
-# Indica a Git LFS que rastree los archivos .h5
-git lfs track "*.h5"
-
-# Asegúrate de que .gitattributes se añada al repositorio (se crea con el comando anterior)
-git add .gitattributes
-
-# Añade tu modelo y súbelo
-git add bicycle_detection_model.h5
-git commit -m "feat: Add trained model via Git LFS"
-git push
-```
-
-### 2. Desplegar en Streamlit Cloud
-
-1.  **Sube tu repositorio a GitHub.**
-2.  **Inicia sesión en [Streamlit Cloud](https://share.streamlit.io/).**
-3.  Haz clic en **"New app"** y selecciona tu repositorio.
-4.  Streamlit detectará automáticamente `app.py`, `requirements.txt` y `packages.txt`.
-5.  Haz clic en **"Deploy!"**.
-
-La aplicación se construirá y desplegará. Gracias a los archivos de configuración, Streamlit Cloud instalará todas las dependencias de Python y del sistema necesarias.
+    - **Umbral de Confianza:** Desliza para ajustar la sensibilidad de la detección.
+    - **Posición de la Línea:** Desliza para cambiar la altura de la línea de conteo.
+3.  **Inicia el Análisis:** Haz clic en el botón "🚀 Procesar Video".
+4.  **Observa los Resultados:** El video se procesará y mostrará en el panel principal con métricas en tiempo real.
 
 ## ☁️ Despliegue en Streamlit Cloud
 
