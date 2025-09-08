@@ -170,20 +170,9 @@ if uploaded_file and process_button:
     # Crear placeholders para la salida
     st_frame = st.empty()
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Conteo Actual", "0")
-    with col2:
-        st.metric("Tiempo de Procesamiento", "0s")
-    with col3:
-        st.metric("Progreso", "0%")
-
+    st.subheader("Registro de Análisis en Tiempo Real")
+    log_placeholder = st.empty()
     progress_bar = st.progress(0)
-
-    def progress_callback(fraction):
-        # Actualiza la métrica de progreso
-        col3.metric("Progreso", f"{int(fraction*100)}%")
-        progress_bar.progress(fraction)
 
     try:
         start_time = time.time()
@@ -194,16 +183,22 @@ if uploaded_file and process_button:
             line_coords=line_coords,
             detection_threshold=detection_threshold,
             img_width=IMG_WIDTH,
-            img_height=IMG_HEIGHT,
-            progress_callback=progress_callback
+            img_height=IMG_HEIGHT
         )
 
+        log_entries = []
         final_count = 0
-        for frame, count in processor:
-            # Actualizar métricas en tiempo real
-            col1.metric("Conteo Actual", str(count))
+        for frame, count, progress in processor:
+            # Actualizar la barra de progreso
+            progress_bar.progress(progress)
+
+            # Crear y añadir el registro
             elapsed_time = f"{time.time() - start_time:.2f}s"
-            col2.metric("Tiempo de Procesamiento", elapsed_time)
+            log_text = f"**Progreso:** {int(progress*100)}% | **Conteo Actual:** {count} | **Tiempo:** {elapsed_time}"
+            log_entries.insert(0, log_text) # Insertar al principio para orden descendente
+
+            # Mostrar los registros
+            log_placeholder.markdown("\n\n".join(log_entries))
 
             # Mostrar el fotograma procesado
             st_frame.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", use_column_width=True)
@@ -214,9 +209,9 @@ if uploaded_file and process_button:
 
         # Estado final
         st.success(f"¡Análisis completado en {total_time:.2f} segundos!")
-        col1.metric("Conteo Final", str(final_count))
-        col2.metric("Tiempo Total", f"{total_time:.2f}s")
-        col3.metric("Progreso", "100%")
+        final_log = f"**FINALIZADO** | **Conteo Final:** {final_count} | **Tiempo Total:** {total_time:.2f}s"
+        log_entries.insert(0, final_log)
+        log_placeholder.markdown("\n\n".join(log_entries))
         progress_bar.progress(1.0)
 
         st.balloons()

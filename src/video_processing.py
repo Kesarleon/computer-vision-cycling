@@ -61,7 +61,7 @@ def do_intersect(p1, q1, p2, q2):
 
     return False
 
-def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height, progress_callback):
+def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height):
     """
     Procesa un video para contar ciclistas y produce fotogramas anotados.
 
@@ -72,10 +72,9 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
         detection_threshold (float): Umbral de confianza para la detección.
         img_width (int): Ancho de la imagen para el modelo.
         img_height (int): Alto de la imagen para el modelo.
-        progress_callback (function): Función para actualizar la barra de progreso.
 
     Yields:
-        tuple: Tupla con el fotograma procesado (np.array) y el conteo actual (int).
+        tuple: Tupla con el fotograma procesado (np.array), el conteo actual (int) y el progreso (float).
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -102,13 +101,18 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
         # Dibujar la línea de conteo principal
         cv2.line(frame, line_p1, line_p2, (0, 0, 255), 2)
 
-        for (object_id, centroid) in objects.items():
+        for (object_id, data) in objects.items():
+            centroid = data['centroid']
+            rect = data['rect']
+
             if object_id not in tracked_paths:
                 tracked_paths[object_id] = deque(maxlen=30)
 
             tracked_paths[object_id].append(centroid)
 
-            # Dibuja el centroide y el ID
+            # Dibuja el recuadro, el centroide y el ID
+            (startX, startY, endX, endY) = rect
+            cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
             text = f"ID {object_id}"
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -129,7 +133,7 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
         cv2.putText(frame, f"Conteo: {bicycle_count}", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
 
-        progress_callback(frame_num / total_frames)
-        yield frame, bicycle_count
+        progress = frame_num / total_frames
+        yield frame, bicycle_count, progress
 
     cap.release()
