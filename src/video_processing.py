@@ -17,33 +17,74 @@ def detect_bicycles(frame, model, detection_threshold, img_width, img_height):
         return [(int(w*0.25), int(h*0.25), int(w*0.75), int(h*0.75))]
     return []
 
-def process_video(video_path, model, line_y, detection_threshold, img_width, img_height, progress_callback):
+# --- Funciones para Geometría y Detección de Cruce ---
+
+def orientation(p, q, r):
+    """
+    Determina la orientación de un triplete ordenado (p, q, r).
+    Retorna:
+    0 --> p, q y r son colineales
+    1 --> Sentido horario (Clockwise)
+    2 --> Sentido antihorario (Counterclockwise)
+    """
+    # Ver https://www.geeksforgeeks.org/orientation-3-ordered-points/
+    # para más detalles.
+    val = (q[1] - p[1]) * (r[0] - q[0]) - \
+          (q[0] - p[0]) * (r[1] - q[1])
+    if val == 0: return 0
+    return 1 if val > 0 else 2
+
+def on_segment(p, q, r):
+    """Dado que tres puntos p, q, r son colineales, la función verifica
+    si el punto q se encuentra en el segmento 'pr'."""
+    if (q[0] <= max(p[0], r[0]) and q[0] >= min(p[0], r[0]) and
+        q[1] <= max(p[1], r[1]) and q[1] >= min(p[1], r[1])):
+        return True
+    return False
+
+def do_intersect(p1, q1, p2, q2):
+    """Retorna verdadero si el segmento de línea 'p1q1' y 'p2q2' se intersectan."""
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+
+    # Caso general: las orientaciones son diferentes
+    if o1 != o2 and o3 != o4:
+        return True
+
+    # Casos especiales de colinealidad (cuando un punto está en el segmento del otro)
+    if o1 == 0 and on_segment(p1, p2, q1): return True
+    if o2 == 0 and on_segment(p1, q2, q1): return True
+    if o3 == 0 and on_segment(p2, p1, q2): return True
+    if o4 == 0 and on_segment(p2, q1, q2): return True
+
+    return False
+
+def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height, progress_callback):
     """
     Procesa un video para contar ciclistas y produce fotogramas anotados.
 
     Args:
         video_path (str): Ruta al archivo de video.
         model: Modelo de Keras para la detección.
-        line_y (int): Posición vertical de la línea de conteo.
+        line_coords (tuple): Tupla con dos puntos ((x1, y1), (x2, y2)) que definen la línea.
         detection_threshold (float): Umbral de confianza para la detección.
         img_width (int): Ancho de la imagen para el modelo.
         img_height (int): Alto de la imagen para el modelo.
         progress_callback (function): Función para actualizar la barra de progreso.
 
     Yields:
-        tuple: Una tupla conteniendo el fotograma procesado (np.array),
-               el conteo actual de bicicletas (int), y el número total de
-               fotogramas (int).
+        tuple: Tupla con el fotograma procesado (np.array) y el conteo actual (int).
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise IOError("Error al abrir el archivo de video.")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    line_p1, line_p2 = line_coords
 
-    tracker = CentroidTracker(max_disappeared=50)
+    tracker = CentroidTracker(max_disappeared=50, max_distance=75)
     tracked_paths = {}
     bicycle_count = 0
     counted_ids = set()
@@ -53,11 +94,13 @@ def process_video(video_path, model, line_y, detection_threshold, img_width, img
         ret, frame = cap.read()
         if not ret:
             break
-
         frame_num += 1
 
         rects = detect_bicycles(frame, model, detection_threshold, img_width, img_height)
         objects = tracker.update(rects)
+
+        # Dibujar la línea de conteo principal
+        cv2.line(frame, line_p1, line_p2, (0, 0, 255), 2)
 
         for (object_id, centroid) in objects.items():
             if object_id not in tracked_paths:
@@ -65,25 +108,26 @@ def process_video(video_path, model, line_y, detection_threshold, img_width, img
 
             tracked_paths[object_id].append(centroid)
 
+            # Dibuja el centroide y el ID
             text = f"ID {object_id}"
-            cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
             cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
 
             if len(tracked_paths[object_id]) > 1:
                 prev_centroid = tracked_paths[object_id][-2]
-                crossed_down = prev_centroid[1] < line_y and centroid[1] >= line_y
-                crossed_up = prev_centroid[1] > line_y and centroid[1] <= line_y
 
-                if (crossed_down or crossed_up) and object_id not in counted_ids:
+                # Comprobar si el trayecto del centroide cruza la línea de conteo
+                if object_id not in counted_ids and do_intersect(prev_centroid, centroid, line_p1, line_p2):
                     bicycle_count += 1
                     counted_ids.add(object_id)
-                    # Dibuja la línea en verde momentáneamente para indicar el cruce
-                    cv2.line(frame, (0, line_y), (w, line_y), (0, 255, 0), 4)
 
-        # Dibujar la línea de conteo estándar
-        cv2.line(frame, (0, line_y), (w, line_y), (0, 0, 255), 2)
-        # Mostrar el conteo en el video
-        cv2.putText(frame, f"Conteo: {bicycle_count}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                    # Resaltar la línea momentáneamente para indicar el cruce
+                    cv2.line(frame, line_p1, line_p2, (0, 255, 0), 4)
+
+        # Mostrar el conteo total en el video
+        cv2.putText(frame, f"Conteo: {bicycle_count}", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
 
         progress_callback(frame_num / total_frames)
         yield frame, bicycle_count
