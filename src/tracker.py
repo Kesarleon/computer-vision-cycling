@@ -8,8 +8,8 @@ class CentroidTracker:
         self.max_disappeared = max_disappeared
         self.max_distance = max_distance
 
-    def register(self, centroid):
-        self.objects[self.next_object_id] = centroid
+    def register(self, centroid, rect):
+        self.objects[self.next_object_id] = {'centroid': centroid, 'rect': rect}
         self.disappeared[self.next_object_id] = 0
         self.next_object_id += 1
 
@@ -32,11 +32,11 @@ class CentroidTracker:
             input_centroids[i] = (cX, cY)
 
         if len(self.objects) == 0:
-            for i in range(len(input_centroids)):
-                self.register(input_centroids[i])
+            for i in range(len(rects)):
+                self.register(input_centroids[i], rects[i])
         else:
             object_ids = list(self.objects.keys())
-            object_centroids = list(self.objects.values())
+            object_centroids = [d['centroid'] for d in self.objects.values()]
 
             D = np.linalg.norm(np.array(object_centroids)[:, np.newaxis] - input_centroids, axis=2)
             rows = D.min(axis=1).argsort()
@@ -53,7 +53,8 @@ class CentroidTracker:
                     continue
 
                 object_id = object_ids[row]
-                self.objects[object_id] = input_centroids[col]
+                self.objects[object_id]['centroid'] = input_centroids[col]
+                self.objects[object_id]['rect'] = rects[col]
                 self.disappeared[object_id] = 0
 
                 used_rows.add(row)
@@ -70,5 +71,5 @@ class CentroidTracker:
                         self.deregister(object_id)
             else:
                 for col in unused_cols:
-                    self.register(input_centroids[col])
+                    self.register(input_centroids[col], rects[col])
         return self.objects
