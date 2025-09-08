@@ -1,21 +1,78 @@
 import cv2
 import numpy as np
-import tensorflow as tf
+import os
 from collections import deque
 from src.tracker import CentroidTracker
 
-def detect_bicycles(frame, model, detection_threshold, img_width, img_height):
-    """Detecta bicicletas en un fotograma usando el modelo CNN."""
-    img = cv2.resize(frame, (img_width, img_height))
-    img_array = tf.keras.preprocessing.image.img_to_array(img)
-    img_array = tf.expand_dims(img_array, 0) / 255.0
+# --- Constantes del Modelo YOLO ---
+YOLO_MODEL_DIR = "yolo_model"
+YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
+YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
+YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
 
-    prediction = model.predict(img_array)[0][0]
+# --- Carga del Modelo y Clases ---
+# Cargar la red YOLO entrenada en el conjunto de datos COCO (80 clases)
+net = cv2.dnn.readNet(YOLO_WEIGHTS_PATH, YOLO_CONFIG_PATH)
+# Cargar los nombres de las clases
+with open(YOLO_NAMES_PATH, "r") as f:
+    CLASSES = [line.strip() for line in f.readlines()]
 
-    if prediction > detection_threshold:
-        h, w, _ = frame.shape
-        return [(int(w*0.25), int(h*0.25), int(w*0.75), int(h*0.75))]
-    return []
+def detect_bicycles(frame, detection_threshold, nms_threshold=0.3):
+    """
+    Detecta bicicletas en un fotograma utilizando el modelo YOLOv3.
+    """
+    (H, W) = frame.shape[:2]
+
+    # Determinar solo los nombres de las capas de SALIDA que necesitamos de YOLO
+    ln = net.getLayerNames()
+    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
+
+    # Construir un blob a partir de la imagen de entrada y luego realizar un pase
+    # hacia adelante del detector de objetos YOLO, dándonos nuestras cajas delimitadoras
+    # y probabilidades asociadas
+    blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+    net.setInput(blob)
+    layerOutputs = net.forward(ln)
+
+    boxes = []
+    confidences = []
+    classIDs = []
+
+    # Iterar sobre cada una de las salidas de la capa
+    for output in layerOutputs:
+        # Iterar sobre cada una de las detecciones
+        for detection in output:
+            scores = detection[5:]
+            classID = np.argmax(scores)
+            confidence = scores[classID]
+
+            # Filtrar las detecciones para mantener solo la clase 'bicycle'
+            # con una confianza suficientemente alta
+            if CLASSES[classID] == "bicycle" and confidence > detection_threshold:
+                box = detection[0:4] * np.array([W, H, W, H])
+                (centerX, centerY, width, height) = box.astype("int")
+
+                # Usar las coordenadas del centro (x, y) para derivar la parte superior
+                # y la esquina izquierda de la caja delimitadora
+                x = int(centerX - (width / 2))
+                y = int(centerY - (height / 2))
+
+                boxes.append([x, y, int(width), int(height)])
+                confidences.append(float(confidence))
+                classIDs.append(classID)
+
+    # Aplicar supresión de no máximos para suprimir las cajas delimitadoras débiles y superpuestas
+    idxs = cv2.dnn.NMSBoxes(boxes, confidences, detection_threshold, nms_threshold)
+
+    final_boxes = []
+    if len(idxs) > 0:
+        for i in idxs.flatten():
+            (x, y) = (boxes[i][0], boxes[i][1])
+            (w, h) = (boxes[i][2], boxes[i][3])
+            # Devolver en formato (startX, startY, endX, endY) para el tracker
+            final_boxes.append((x, y, x + w, y + h))
+
+    return final_boxes
 
 # --- Funciones para Geometría y Detección de Cruce ---
 
@@ -61,21 +118,17 @@ def do_intersect(p1, q1, p2, q2):
 
     return False
 
-def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height, progress_callback):
+def process_video(video_path, line_coords, detection_threshold):
     """
     Procesa un video para contar ciclistas y produce fotogramas anotados.
 
     Args:
         video_path (str): Ruta al archivo de video.
-        model: Modelo de Keras para la detección.
         line_coords (tuple): Tupla con dos puntos ((x1, y1), (x2, y2)) que definen la línea.
         detection_threshold (float): Umbral de confianza para la detección.
-        img_width (int): Ancho de la imagen para el modelo.
-        img_height (int): Alto de la imagen para el modelo.
-        progress_callback (function): Función para actualizar la barra de progreso.
 
     Yields:
-        tuple: Tupla con el fotograma procesado (np.array) y el conteo actual (int).
+        tuple: Tupla con el fotograma procesado (np.array), el conteo actual (int) y el progreso (float).
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -96,19 +149,24 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
             break
         frame_num += 1
 
-        rects = detect_bicycles(frame, model, detection_threshold, img_width, img_height)
+        rects = detect_bicycles(frame, detection_threshold)
         objects = tracker.update(rects)
 
         # Dibujar la línea de conteo principal
         cv2.line(frame, line_p1, line_p2, (0, 0, 255), 2)
 
-        for (object_id, centroid) in objects.items():
+        for (object_id, data) in objects.items():
+            centroid = data['centroid']
+            rect = data['rect']
+
             if object_id not in tracked_paths:
                 tracked_paths[object_id] = deque(maxlen=30)
 
             tracked_paths[object_id].append(centroid)
 
-            # Dibuja el centroide y el ID
+            # Dibuja el recuadro, el centroide y el ID
+            (startX, startY, endX, endY) = rect
+            cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
             text = f"ID {object_id}"
             cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -129,7 +187,7 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
         cv2.putText(frame, f"Conteo: {bicycle_count}", (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
 
-        progress_callback(frame_num / total_frames)
-        yield frame, bicycle_count
+        progress = frame_num / total_frames
+        yield frame, bicycle_count, progress
 
     cap.release()

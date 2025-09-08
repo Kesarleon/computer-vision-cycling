@@ -3,26 +3,27 @@ import cv2
 import os
 import tempfile
 import time
-import tensorflow as tf
 import requests
 from src.video_processing import process_video
 
 # --- Constantes y Configuración ---
-MODEL_PATH = 'bicycle_detection_model.h5'
-# --- Añadir URL del modelo ---
-# IMPORTANTE: Sube tu archivo 'bicycle_detection_model.h5' a un servicio de hosting
-# (como un release de GitHub, Google Drive, etc.) y pega aquí el enlace de descarga directa.
-MODEL_URL = "https://github.com/DagsAd/TFM-Dasboard-Streamlit-Computer-Vision/raw/main/bicycle_detection_model.h5"
-IMG_HEIGHT, IMG_WIDTH = 128, 128
+YOLO_MODEL_DIR = "yolo_model"
+YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
+YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
+YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
 
-def download_model(url, path):
-    """Descarga el modelo desde una URL y muestra una barra de progreso."""
-    st.info(f"El modelo no se encuentra localmente. Descargando desde la nube...")
-    st.warning("Esto puede tardar unos minutos la primera vez.")
+YOLO_CONFIG_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg"
+YOLO_WEIGHTS_URL = "https://pjreddie.com/media/files/yolov3.weights"
+YOLO_NAMES_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names"
+
+def download_file_with_progress(url, path, message):
+    st.info(message)
+    if "yolov3.weights" in path:
+        st.warning("Este archivo es grande (aprox. 240 MB) y la descarga puede tardar varios minutos.")
 
     try:
         response = requests.get(url, stream=True)
-        response.raise_for_status()  # Lanza un error para respuestas 4xx/5xx
+        response.raise_for_status()
 
         total_size = int(response.headers.get('content-length', 0))
         chunk_size = 1024 * 1024 # 1 MB
@@ -37,41 +38,32 @@ def download_model(url, path):
                 downloaded_size += len(chunk)
                 progress = downloaded_size / total_size if total_size > 0 else 0
                 progress_bar.progress(min(progress, 1.0))
-                progress_status.text(f"Descargando... {int(downloaded_size / chunk_size)} / {int(total_size / chunk_size)} MB")
+                file_name = os.path.basename(path)
+                progress_status.text(f"Descargando {file_name}: {int(downloaded_size / chunk_size)} / {int(total_size / chunk_size)} MB")
 
-        progress_status.text("¡Descarga completada!")
+        progress_status.text(f"¡Descarga de {os.path.basename(path)} completada!")
         progress_bar.empty()
 
     except requests.exceptions.RequestException as e:
-        st.error(f"Error al descargar el modelo: {e}")
-        st.error("Por favor, verifica la URL del modelo y tu conexión a internet.")
-        # Si la descarga falla, detenemos la app para evitar más errores.
+        st.error(f"Error al descargar el archivo '{os.path.basename(path)}': {e}")
         st.stop()
     except IOError as e:
-        st.error(f"No se pudo escribir el archivo del modelo en el disco: {e}")
+        st.error(f"No se pudo escribir el archivo '{os.path.basename(path)}' en el disco: {e}")
         st.stop()
 
+def setup_yolo_model():
+    """Verifica si los archivos del modelo YOLO existen y, si no, los descarga."""
+    if not os.path.exists(YOLO_MODEL_DIR):
+        os.makedirs(YOLO_MODEL_DIR)
 
-# --- Carga del Modelo ---
-@st.cache_resource
-def load_detection_model():
-    """
-    Carga el modelo de detección de Keras.
-    Si no existe localmente, lo descarga desde una URL.
-    """
-    # Comprobar si el modelo existe. Si no, descargarlo.
-    if not os.path.exists(MODEL_PATH):
-        download_model(MODEL_URL, MODEL_PATH)
+    if not os.path.exists(YOLO_CONFIG_PATH):
+        download_file_with_progress(YOLO_CONFIG_URL, YOLO_CONFIG_PATH, "Descargando archivo de configuración de YOLO...")
 
-    # Una vez que el modelo está (o ha sido) descargado, cargarlo.
-    try:
-        with st.spinner("Cargando modelo de IA en memoria..."):
-            model = tf.keras.models.load_model(MODEL_PATH)
-        return model
-    except Exception as e:
-        st.error(f"Error crítico al cargar el modelo: {e}")
-        st.error("El archivo del modelo podría estar corrupto. Intenta borrarlo para que se descargue de nuevo.")
-        return None
+    if not os.path.exists(YOLO_WEIGHTS_PATH):
+        download_file_with_progress(YOLO_WEIGHTS_URL, YOLO_WEIGHTS_PATH, "Descargando pesos del modelo YOLOv3...")
+
+    if not os.path.exists(YOLO_NAMES_PATH):
+        download_file_with_progress(YOLO_NAMES_URL, YOLO_NAMES_PATH, "Descargando nombres de clases de YOLO...")
 
 # --- Interfaz de Streamlit ---
 st.set_page_config(page_title="Análisis de Video: Conteo de Ciclistas", layout="wide", page_icon="🚴")
@@ -81,13 +73,9 @@ with st.sidebar:
     st.title("🚴 Análisis de Video IA")
     st.info("Esta aplicación utiliza un modelo de IA para detectar y contar ciclistas en un video.")
 
-    model = load_detection_model()
-
-    if model is None:
-        st.error(f"Modelo no encontrado en `{MODEL_PATH}`. Por favor, ejecuta el notebook de entrenamiento.")
-        st.stop()
-    else:
-        st.success("Modelo cargado.")
+    # Configurar y verificar el modelo YOLO
+    setup_yolo_model()
+    st.success("Modelo de detección listo.")
 
     st.header("Configuración")
     uploaded_file = st.file_uploader(
@@ -170,40 +158,32 @@ if uploaded_file and process_button:
     # Crear placeholders para la salida
     st_frame = st.empty()
     st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Conteo Actual", "0")
-    with col2:
-        st.metric("Tiempo de Procesamiento", "0s")
-    with col3:
-        st.metric("Progreso", "0%")
-
+    st.subheader("Registro de Análisis en Tiempo Real")
+    log_placeholder = st.empty()
     progress_bar = st.progress(0)
-
-    def progress_callback(fraction):
-        # Actualiza la métrica de progreso
-        col3.metric("Progreso", f"{int(fraction*100)}%")
-        progress_bar.progress(fraction)
 
     try:
         start_time = time.time()
 
         processor = process_video(
             video_path=video_path,
-            model=model,
             line_coords=line_coords,
-            detection_threshold=detection_threshold,
-            img_width=IMG_WIDTH,
-            img_height=IMG_HEIGHT,
-            progress_callback=progress_callback
+            detection_threshold=detection_threshold
         )
 
+        log_entries = []
         final_count = 0
-        for frame, count in processor:
-            # Actualizar métricas en tiempo real
-            col1.metric("Conteo Actual", str(count))
+        for frame, count, progress in processor:
+            # Actualizar la barra de progreso
+            progress_bar.progress(progress)
+
+            # Crear y añadir el registro
             elapsed_time = f"{time.time() - start_time:.2f}s"
-            col2.metric("Tiempo de Procesamiento", elapsed_time)
+            log_text = f"**Progreso:** {int(progress*100)}% | **Conteo Actual:** {count} | **Tiempo:** {elapsed_time}"
+            log_entries.insert(0, log_text) # Insertar al principio para orden descendente
+
+            # Mostrar los registros
+            log_placeholder.markdown("\n\n".join(log_entries))
 
             # Mostrar el fotograma procesado
             st_frame.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", use_column_width=True)
@@ -214,9 +194,9 @@ if uploaded_file and process_button:
 
         # Estado final
         st.success(f"¡Análisis completado en {total_time:.2f} segundos!")
-        col1.metric("Conteo Final", str(final_count))
-        col2.metric("Tiempo Total", f"{total_time:.2f}s")
-        col3.metric("Progreso", "100%")
+        final_log = f"**FINALIZADO** | **Conteo Final:** {final_count} | **Tiempo Total:** {total_time:.2f}s"
+        log_entries.insert(0, final_log)
+        log_placeholder.markdown("\n\n".join(log_entries))
         progress_bar.progress(1.0)
 
         st.balloons()
