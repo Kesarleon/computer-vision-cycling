@@ -1,11 +1,12 @@
 import numpy as np
 
 class CentroidTracker:
-    def __init__(self, max_disappeared=50):
+    def __init__(self, max_disappeared=50, max_distance=75):
         self.next_object_id = 0
         self.objects = {}
         self.disappeared = {}
         self.max_disappeared = max_disappeared
+        self.max_distance = max_distance
 
     def register(self, centroid):
         self.objects[self.next_object_id] = centroid
@@ -46,6 +47,9 @@ class CentroidTracker:
 
             for (row, col) in zip(rows, cols):
                 if row in used_rows or col in used_cols:
+                    continue
+
+                if D[row, col] > self.max_distance:
                     continue
 
                 object_id = object_ids[row]
