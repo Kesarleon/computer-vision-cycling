@@ -4,25 +4,73 @@ import os
 import tempfile
 import time
 import tensorflow as tf
+import requests
 from src.video_processing import process_video
 
 # --- Constantes y Configuración ---
 MODEL_PATH = 'bicycle_detection_model.h5'
+# --- Añadir URL del modelo ---
+# IMPORTANTE: Sube tu archivo 'bicycle_detection_model.h5' a un servicio de hosting
+# (como un release de GitHub, Google Drive, etc.) y pega aquí el enlace de descarga directa.
+MODEL_URL = "https://github.com/DagsAd/TFM-Dasboard-Streamlit-Computer-Vision/raw/main/bicycle_detection_model.h5"
 IMG_HEIGHT, IMG_WIDTH = 128, 128
+
+def download_model(url, path):
+    """Descarga el modelo desde una URL y muestra una barra de progreso."""
+    st.info(f"El modelo no se encuentra localmente. Descargando desde la nube...")
+    st.warning("Esto puede tardar unos minutos la primera vez.")
+
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()  # Lanza un error para respuestas 4xx/5xx
+
+        total_size = int(response.headers.get('content-length', 0))
+        chunk_size = 1024 * 1024 # 1 MB
+
+        progress_bar = st.progress(0)
+        progress_status = st.empty()
+
+        with open(path, 'wb') as f:
+            downloaded_size = 0
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                f.write(chunk)
+                downloaded_size += len(chunk)
+                progress = downloaded_size / total_size if total_size > 0 else 0
+                progress_bar.progress(min(progress, 1.0))
+                progress_status.text(f"Descargando... {int(downloaded_size / chunk_size)} / {int(total_size / chunk_size)} MB")
+
+        progress_status.text("¡Descarga completada!")
+        progress_bar.empty()
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error al descargar el modelo: {e}")
+        st.error("Por favor, verifica la URL del modelo y tu conexión a internet.")
+        # Si la descarga falla, detenemos la app para evitar más errores.
+        st.stop()
+    except IOError as e:
+        st.error(f"No se pudo escribir el archivo del modelo en el disco: {e}")
+        st.stop()
+
 
 # --- Carga del Modelo ---
 @st.cache_resource
 def load_detection_model():
-    """Carga el modelo de detección de Keras. Cacheado para alto rendimiento."""
+    """
+    Carga el modelo de detección de Keras.
+    Si no existe localmente, lo descarga desde una URL.
+    """
+    # Comprobar si el modelo existe. Si no, descargarlo.
     if not os.path.exists(MODEL_PATH):
-        return None
+        download_model(MODEL_URL, MODEL_PATH)
+
+    # Una vez que el modelo está (o ha sido) descargado, cargarlo.
     try:
-        # Usar st.spinner para mostrar que el modelo se está cargando
-        with st.spinner("Cargando modelo de IA..."):
+        with st.spinner("Cargando modelo de IA en memoria..."):
             model = tf.keras.models.load_model(MODEL_PATH)
         return model
     except Exception as e:
         st.error(f"Error crítico al cargar el modelo: {e}")
+        st.error("El archivo del modelo podría estar corrupto. Intenta borrarlo para que se descargue de nuevo.")
         return None
 
 # --- Interfaz de Streamlit ---
@@ -54,12 +102,33 @@ with st.sidebar:
         help="Un valor más alto significa que la IA debe estar más segura para detectar una bicicleta. Ayuda a reducir falsos positivos."
     )
 
-    # Placeholder para la línea de conteo, se actualizará después de cargar el video
-    line_position_percent = st.slider(
-        "Posición de la Línea de Conteo (Vertical)",
-        min_value=10, max_value=90, value=50, step=5,
-        help="Define la línea virtual que un ciclista debe cruzar para ser contado. Se mide como un porcentaje desde la parte superior del video."
+    st.header("Parámetros de la Línea de Conteo")
+    line_type = st.selectbox(
+        "Tipo de Línea",
+        ("Horizontal", "Vertical", "Inclinada"),
+        help="Selecciona la orientación de la línea de conteo."
     )
+
+    line_coords_percent = {}
+    if line_type == "Horizontal":
+        line_coords_percent['y1'] = st.slider(
+            "Posición Vertical (%)", 1, 99, 50,
+            help="Posición de la línea horizontal desde la parte superior del video."
+        )
+    elif line_type == "Vertical":
+        line_coords_percent['x1'] = st.slider(
+            "Posición Horizontal (%)", 1, 99, 50,
+            help="Posición de la línea vertical desde la izquierda del video."
+        )
+    elif line_type == "Inclinada":
+        col1, col2 = st.columns(2)
+        with col1:
+            line_coords_percent['x1'] = st.slider("Punto 1 - X (%)", 1, 99, 25)
+            line_coords_percent['y1'] = st.slider("Punto 1 - Y (%)", 1, 99, 25)
+        with col2:
+            line_coords_percent['x2'] = st.slider("Punto 2 - X (%)", 1, 99, 75)
+            line_coords_percent['y2'] = st.slider("Punto 2 - Y (%)", 1, 99, 75)
+
 
     process_button = st.button("🚀 Iniciar Análisis")
 
@@ -75,11 +144,28 @@ if uploaded_file and process_button:
     tfile.write(uploaded_file.read())
     video_path = tfile.name
 
-    # Obtener dimensiones del video para la línea de conteo
+    # Obtener dimensiones del video y calcular coordenadas de la línea
     cap = cv2.VideoCapture(video_path)
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     cap.release()
-    line_y = int(h * (line_position_percent / 100))
+
+    # Calcular coordenadas de la línea en píxeles
+    if line_type == "Horizontal":
+        y = int(h * (line_coords_percent['y1'] / 100))
+        line_coords = ((0, y), (w, y))
+    elif line_type == "Vertical":
+        x = int(w * (line_coords_percent['x1'] / 100))
+        line_coords = ((x, 0), (x, h))
+    elif line_type == "Inclinada":
+        x1 = int(w * (line_coords_percent['x1'] / 100))
+        y1 = int(h * (line_coords_percent['y1'] / 100))
+        x2 = int(w * (line_coords_percent['x2'] / 100))
+        y2 = int(h * (line_coords_percent['y2'] / 100))
+        line_coords = ((x1, y1), (x2, y2))
+    else: # Fallback
+        line_coords = ((0, h // 2), (w, h // 2))
+
 
     # Crear placeholders para la salida
     st_frame = st.empty()
@@ -105,7 +191,7 @@ if uploaded_file and process_button:
         processor = process_video(
             video_path=video_path,
             model=model,
-            line_y=line_y,
+            line_coords=line_coords,
             detection_threshold=detection_threshold,
             img_width=IMG_WIDTH,
             img_height=IMG_HEIGHT,
