@@ -10,22 +10,11 @@ YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
 YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
 YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
 
-# --- Carga del Modelo y Clases ---
-# Cargar la red YOLO entrenada en el conjunto de datos COCO (80 clases)
-net = cv2.dnn.readNet(YOLO_WEIGHTS_PATH, YOLO_CONFIG_PATH)
-# Cargar los nombres de las clases
-with open(YOLO_NAMES_PATH, "r") as f:
-    CLASSES = [line.strip() for line in f.readlines()]
-
-def detect_bicycles(frame, detection_threshold, nms_threshold=0.3):
+def detect_bicycles(frame, net, ln, CLASSES, detection_threshold, nms_threshold=0.3):
     """
-    Detecta bicicletas en un fotograma utilizando el modelo YOLOv3.
+    Detecta bicicletas en un fotograma utilizando un modelo YOLOv3 pre-cargado.
     """
     (H, W) = frame.shape[:2]
-
-    # Determinar solo los nombres de las capas de SALIDA que necesitamos de YOLO
-    ln = net.getLayerNames()
-    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
 
     # Construir un blob a partir de la imagen de entrada y luego realizar un pase
     # hacia adelante del detector de objetos YOLO, dándonos nuestras cajas delimitadoras
@@ -118,7 +107,7 @@ def do_intersect(p1, q1, p2, q2):
 
     return False
 
-def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height):
+def process_video(video_path, line_coords, detection_threshold):
     """
     Procesa un video para contar ciclistas y produce fotogramas anotados.
 
@@ -126,8 +115,6 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
         video_path (str): Ruta al archivo de video.
         line_coords (tuple): Tupla con dos puntos ((x1, y1), (x2, y2)) que definen la línea.
         detection_threshold (float): Umbral de confianza para la detección.
-        img_width (int): Ancho de la imagen para el modelo.
-        img_height (int): Alto de la imagen para el modelo.
 
     Yields:
         tuple: Tupla con el fotograma procesado (np.array), el conteo actual (int) y el progreso (float).
@@ -138,6 +125,15 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     line_p1, line_p2 = line_coords
+
+    # Cargar la red YOLO y las clases
+    net = cv2.dnn.readNet(YOLO_WEIGHTS_PATH, YOLO_CONFIG_PATH)
+    with open(YOLO_NAMES_PATH, "r") as f:
+        CLASSES = [line.strip() for line in f.readlines()]
+
+    # Determinar solo los nombres de las capas de SALIDA que necesitamos de YOLO
+    ln = net.getLayerNames()
+    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
 
     tracker = CentroidTracker(max_disappeared=50, max_distance=75)
     tracked_paths = {}
@@ -151,7 +147,7 @@ def process_video(video_path, model, line_coords, detection_threshold, img_width
             break
         frame_num += 1
 
-        rects = detect_bicycles(frame, detection_threshold)
+        rects = detect_bicycles(frame, net, ln, CLASSES, detection_threshold)
         objects = tracker.update(rects)
 
         # Dibujar la línea de conteo principal
