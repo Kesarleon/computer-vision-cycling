@@ -1,9 +1,6 @@
-tensorflow
 opencv-python-headless==4.5.5.64
-streamlit
-scikit-learn
-pandas
-numpy
-jupyter
-matplotlib
-requests
+streamlit==1.30.0
+scikit-learn==1.0.2
+pandas==1.4.0
+numpy==1.22.4
+requests==2.28.0
