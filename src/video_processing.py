@@ -118,7 +118,7 @@ def do_intersect(p1, q1, p2, q2):
 
     return False
 
-def process_video(video_path, line_coords, detection_threshold):
+def process_video(video_path, model, line_coords, detection_threshold, img_width, img_height):
     """
     Procesa un video para contar ciclistas y produce fotogramas anotados.
 
@@ -126,6 +126,8 @@ def process_video(video_path, line_coords, detection_threshold):
         video_path (str): Ruta al archivo de video.
         line_coords (tuple): Tupla con dos puntos ((x1, y1), (x2, y2)) que definen la línea.
         detection_threshold (float): Umbral de confianza para la detección.
+        img_width (int): Ancho de la imagen para el modelo.
+        img_height (int): Alto de la imagen para el modelo.
 
     Yields:
         tuple: Tupla con el fotograma procesado (np.array), el conteo actual (int) y el progreso (float).

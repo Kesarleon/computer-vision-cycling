@@ -168,7 +168,9 @@ if uploaded_file and process_button:
         processor = process_video(
             video_path=video_path,
             line_coords=line_coords,
-            detection_threshold=detection_threshold
+            detection_threshold=detection_threshold,
+            img_width=IMG_WIDTH,
+            img_height=IMG_HEIGHT
         )
 
         log_entries = []
