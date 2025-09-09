@@ -8,18 +8,18 @@ from src.video_processing import process_video
 
 # --- Constantes y Configuración ---
 YOLO_MODEL_DIR = "yolo_model"
-YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
-YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
+YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3-tiny.cfg")
+YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3-tiny.weights")
 YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
 
-YOLO_CONFIG_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg"
-YOLO_WEIGHTS_URL = "https://pjreddie.com/media/files/yolov3.weights"
+YOLO_CONFIG_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg"
+YOLO_WEIGHTS_URL = "https://pjreddie.com/media/files/yolov3-tiny.weights"
 YOLO_NAMES_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names"
 
 def download_file_with_progress(url, path, message):
     st.info(message)
-    if "yolov3.weights" in path:
-        st.warning("Este archivo es grande (aprox. 240 MB) y la descarga puede tardar varios minutos.")
+    if "yolov3-tiny.weights" in path:
+        st.warning("Descargando pesos del modelo (aprox. 35 MB)...")
 
     try:
         response = requests.get(url, stream=True)

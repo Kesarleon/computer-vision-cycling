@@ -6,8 +6,8 @@ from src.tracker import CentroidTracker
 
 # --- Constantes del Modelo YOLO ---
 YOLO_MODEL_DIR = "yolo_model"
-YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
-YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
+YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3-tiny.cfg")
+YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3-tiny.weights")
 YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
 
 def detect_bicycles(frame, net, ln, CLASSES, detection_threshold, nms_threshold=0.3):
