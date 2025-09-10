@@ -1,6 +1,6 @@
 # Conteo de Viajes de Ciclistas con Visión por Computadora
 
-Este proyecto ofrece una solución profesional y atractiva para detectar y contar ciclistas en videos utilizando visión por computadora. La herramienta se presenta a través de una aplicación web interactiva construida con Streamlit, respaldada por un modelo de Red Neuronal Convolucional (CNN) entrenado con TensorFlow/Keras.
+Este proyecto ofrece una solución profesional y atractiva para detectar, seguir y contar ciclistas en videos utilizando un modelo de visión por computadora. La herramienta se presenta a través de una aplicación web interactiva construida con Streamlit, que utiliza el detector de objetos **YOLOv3** para un análisis preciso y en tiempo real.
 
 <!-- ![Demostración de la Aplicación](URL_A_LA_IMAGEN_DE_DEMO.png) -->
 *<p align="center">Un marcador de posición para una futura demostración de la aplicación.</p>*
@@ -8,15 +8,15 @@ Este proyecto ofrece una solución profesional y atractiva para detectar y conta
 ## ✨ Características Principales
 
 - **Interfaz de Usuario Interactiva:** Una aplicación web moderna y fácil de usar donde puedes subir tus propios videos.
-- **Detección por IA:** Utiliza un modelo de TensorFlow/Keras para identificar ciclistas en cada fotograma.
-- **Seguimiento de Objetos:** Implementa un tracker de centroides para seguir a los ciclistas detectados a través del tiempo.
-- **Conteo por Línea Virtual:** Cuenta automáticamente a los ciclistas que cruzan una línea virtual en el video.
+- **Detección por IA con YOLOv3:** Utiliza un modelo YOLOv3 pre-entrenado para identificar la ubicación exacta de los ciclistas en cada fotograma.
+- **Seguimiento de Objetos:** Implementa un tracker de centroides para seguir a los ciclistas detectados a lo largo del video.
+- **Conteo por Línea Virtual:** Cuenta automáticamente a los ciclistas que cruzan una línea virtual personalizable (horizontal, vertical o inclinada).
 - **Configuración Personalizable:**
-  - **Ajuste del Umbral de Detección:** Controla la sensibilidad del modelo de IA para reducir falsos positivos.
-  - **Línea de Conteo Dinámica:** Ajusta la posición vertical de la línea de conteo directamente desde la interfaz.
-- **Panel de Resultados en Tiempo Real:** Visualiza el conteo, el tiempo de procesamiento y el progreso del análisis mientras se ejecuta.
+  - **Ajuste del Umbral de Detección:** Controla la sensibilidad del modelo para reducir falsos positivos.
+  - **Línea de Conteo Dinámica:** Ajusta la posición de la línea de conteo directamente desde la interfaz.
+- **Panel de Resultados en Tiempo Real:** Visualiza el conteo, el progreso del análisis y el tiempo transcurrido mientras se procesa el video.
 
-## 📂 Estructura del Repositorio Profesional
+## 📂 Estructura del Repositorio
 
 El código ha sido refactorizado para seguir las mejores prácticas, separando la lógica de la interfaz de usuario para mayor claridad y mantenimiento.
 
@@ -25,15 +25,11 @@ bicycle-trip-counter/
 │
 ├── app.py                  # Aplicación web principal de Streamlit (UI)
 ├── src/
-│   ├── __init__.py
 │   ├── tracker.py          # Módulo para el seguimiento de centroides
 │   └── video_processing.py # Lógica principal de procesamiento de video
 ├── data/
 │   └── .gitkeep            # Directorio para videos de entrada
-├── notebooks/
-│   └── training.ipynb      # Notebook para entrenar el modelo de detección
 ├── requirements.txt        # Dependencias de Python
-├── bicycle_detection_model.h5  # (Generado) Modelo entrenado
 └── README.md               # Esta documentación
 ```
 
@@ -51,34 +47,29 @@ source venv/bin/activate  # En Windows: venv\Scripts\activate
 
 ### 2. Instalar Dependencias
 
+Asegúrate de tener todas las librerías necesarias.
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Generar el Modelo (Si no existe)
+### 3. Ejecutar la Aplicación
 
-El modelo `bicycle_detection_model.h5` es necesario para ejecutar la aplicación. Si no lo tienes, puedes generarlo ejecutando el notebook de Jupyter:
-- Abre y ejecuta `notebooks/training.ipynb`.
-- El notebook incluye una celda de simulación para generar datos de entrenamiento de demostración, por lo que no se requiere etiquetado manual para empezar.
-- Al finalizar, el modelo se guardará en el directorio raíz.
-
-### 4. Ejecutar la Aplicación
-
-Con el modelo en su lugar, inicia la aplicación Streamlit:
+La aplicación se encarga de todo lo demás. La primera vez que la inicies, **descargará automáticamente los archivos del modelo YOLOv3** (aproximadamente 240 MB). Este proceso solo ocurre una vez.
 
 ```bash
 streamlit run app.py
 ```
 
-Tu navegador se abrirá con la aplicación.
+Tu navegador se abrirá con la aplicación lista para usarse.
 
 ## 🤖 Cómo Usar la Aplicación
 
 1.  **Sube un Video:** Usa el cargador de archivos en la barra lateral izquierda.
 2.  **Ajusta los Parámetros:**
     - **Umbral de Confianza:** Desliza para ajustar la sensibilidad de la detección. Un valor más alto requiere que el modelo esté más seguro.
-    - **Posición de la Línea:** Desliza para cambiar la altura de la línea roja de conteo en el video.
-3.  **Inicia el Análisis:** Haz clic en el botón "🚀 Iniciar Análisis".
+    - **Tipo y Posición de la Línea:** Elige entre una línea horizontal, vertical o inclinada y ajusta su posición en el video.
+3.  **Inicia el Análisis:** Haz clic en el botón "**🚀 Iniciar Análisis**".
 4.  **Observa los Resultados:** El video se procesará y mostrará en el panel principal. Las métricas de conteo y progreso se actualizarán en tiempo real.
 
 ## 🤝 Contribuciones
