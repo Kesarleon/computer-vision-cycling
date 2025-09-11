@@ -1,6 +1,6 @@
 # Conteo de Viajes de Ciclistas con Visión por Computadora
 
-Este proyecto ofrece una solución profesional y atractiva para detectar, seguir y contar ciclistas en videos utilizando un modelo de visión por computadora. La herramienta se presenta a través de una aplicación web interactiva construida con Streamlit, que utiliza el detector de objetos **YOLOv3** para un análisis preciso y en tiempo real.
+Este proyecto ofrece una solución profesional y atractiva para detectar, seguir y contar ciclistas en videos utilizando un modelo de visión por computadora. La herramienta se presenta a través de una aplicación web interactiva construida con Streamlit, que utiliza el detector de objetos **YOLOv8** de Ultralytics para un análisis preciso y en tiempo real.
 
 <!-- ![Demostración de la Aplicación](URL_A_LA_IMAGEN_DE_DEMO.png) -->
 *<p align="center">Un marcador de posición para una futura demostración de la aplicación.</p>*
@@ -8,7 +8,8 @@ Este proyecto ofrece una solución profesional y atractiva para detectar, seguir
 ## ✨ Características Principales
 
 - **Interfaz de Usuario Interactiva:** Una aplicación web moderna y fácil de usar donde puedes subir tus propios videos.
-- **Detección por IA con YOLOv3:** Utiliza un modelo YOLOv3 pre-entrenado para identificar la ubicación exacta de los ciclistas en cada fotograma.
+- **Detección por IA con YOLOv8:** Utiliza un modelo YOLOv8 pre-entrenado de Ultralytics para identificar la ubicación exacta de los ciclistas en cada fotograma.
+- **Modelo de Carga Automática:** El modelo YOLOv8 se descarga y se guarda en caché automáticamente la primera vez que se usa.
 - **Seguimiento de Objetos:** Implementa un tracker de centroides para seguir a los ciclistas detectados a lo largo del video.
 - **Conteo por Línea Virtual:** Cuenta automáticamente a los ciclistas que cruzan una línea virtual personalizable (horizontal, vertical o inclinada).
 - **Configuración Personalizable:**
@@ -55,7 +56,7 @@ pip install -r requirements.txt
 
 ### 3. Ejecutar la Aplicación
 
-La aplicación se encarga de todo lo demás. La primera vez que la inicies, **descargará automáticamente los archivos del modelo YOLOv3** (aproximadamente 240 MB). Este proceso solo ocurre una vez.
+La aplicación se encarga de todo lo demás. La primera vez que la inicies, la librería `ultralytics` **descargará automáticamente el modelo YOLOv8** y lo guardará en caché para usos futuros.
 
 ```bash
 streamlit run app.py
