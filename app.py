@@ -3,67 +3,7 @@ import cv2
 import os
 import tempfile
 import time
-import requests
 from src.video_processing import process_video
-
-# --- Constantes y Configuración ---
-YOLO_MODEL_DIR = "yolo_model"
-YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
-YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
-YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
-
-YOLO_CONFIG_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg"
-YOLO_WEIGHTS_URL = "https://pjreddie.com/media/files/yolov3.weights"
-YOLO_NAMES_URL = "https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names"
-
-def download_file_with_progress(url, path, message):
-    st.info(message)
-    if "yolov3.weights" in path:
-        st.warning("Este archivo es grande (aprox. 240 MB) y la descarga puede tardar varios minutos.")
-
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-
-        total_size = int(response.headers.get('content-length', 0))
-        chunk_size = 1024 * 1024 # 1 MB
-
-        progress_bar = st.progress(0)
-        progress_status = st.empty()
-
-        with open(path, 'wb') as f:
-            downloaded_size = 0
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                f.write(chunk)
-                downloaded_size += len(chunk)
-                progress = downloaded_size / total_size if total_size > 0 else 0
-                progress_bar.progress(min(progress, 1.0))
-                file_name = os.path.basename(path)
-                progress_status.text(f"Descargando {file_name}: {int(downloaded_size / chunk_size)} / {int(total_size / chunk_size)} MB")
-
-        progress_status.text(f"¡Descarga de {os.path.basename(path)} completada!")
-        progress_bar.empty()
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error al descargar el archivo '{os.path.basename(path)}': {e}")
-        st.stop()
-    except IOError as e:
-        st.error(f"No se pudo escribir el archivo '{os.path.basename(path)}' en el disco: {e}")
-        st.stop()
-
-def setup_yolo_model():
-    """Verifica si los archivos del modelo YOLO existen y, si no, los descarga."""
-    if not os.path.exists(YOLO_MODEL_DIR):
-        os.makedirs(YOLO_MODEL_DIR)
-
-    if not os.path.exists(YOLO_CONFIG_PATH):
-        download_file_with_progress(YOLO_CONFIG_URL, YOLO_CONFIG_PATH, "Descargando archivo de configuración de YOLO...")
-
-    if not os.path.exists(YOLO_WEIGHTS_PATH):
-        download_file_with_progress(YOLO_WEIGHTS_URL, YOLO_WEIGHTS_PATH, "Descargando pesos del modelo YOLOv3...")
-
-    if not os.path.exists(YOLO_NAMES_PATH):
-        download_file_with_progress(YOLO_NAMES_URL, YOLO_NAMES_PATH, "Descargando nombres de clases de YOLO...")
 
 # --- Interfaz de Streamlit ---
 st.set_page_config(page_title="Análisis de Video: Conteo de Ciclistas", layout="wide", page_icon="🚴")
@@ -71,11 +11,10 @@ st.set_page_config(page_title="Análisis de Video: Conteo de Ciclistas", layout=
 # --- Barra Lateral (Sidebar) ---
 with st.sidebar:
     st.title("🚴 Análisis de Video IA")
-    st.info("Esta aplicación utiliza un modelo de IA para detectar y contar ciclistas en un video.")
-
-    # Configurar y verificar el modelo YOLO
-    setup_yolo_model()
-    st.success("Modelo de detección listo.")
+    st.info(
+        "Esta aplicación utiliza el modelo de IA **YOLOv8** para detectar y contar "
+        "ciclistas en un video. El modelo se descarga automáticamente."
+    )
 
     st.header("Configuración")
     uploaded_file = st.file_uploader(

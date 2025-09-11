@@ -1,65 +1,32 @@
 import cv2
 import numpy as np
-import os
 from collections import deque
+from ultralytics import YOLO
 from src.tracker import CentroidTracker
 
-# --- Constantes del Modelo YOLO ---
-YOLO_MODEL_DIR = "yolo_model"
-YOLO_CONFIG_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.cfg")
-YOLO_WEIGHTS_PATH = os.path.join(YOLO_MODEL_DIR, "yolov3.weights")
-YOLO_NAMES_PATH = os.path.join(YOLO_MODEL_DIR, "coco.names")
-
-def detect_bicycles(frame, net, ln, CLASSES, detection_threshold, nms_threshold=0.3):
+def detect_bicycles(frame, model, detection_threshold):
     """
-    Detecta bicicletas en un fotograma utilizando un modelo YOLOv3 pre-cargado.
+    Detecta bicicletas en un fotograma utilizando un modelo YOLOv8 de Ultralytics.
     """
-    (H, W) = frame.shape[:2]
-
-    # Construir un blob a partir de la imagen de entrada y luego realizar un pase
-    # hacia adelante del detector de objetos YOLO, dándonos nuestras cajas delimitadoras
-    # y probabilidades asociadas
-    blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
-    net.setInput(blob)
-    layerOutputs = net.forward(ln)
-
-    boxes = []
-    confidences = []
-    classIDs = []
-
-    # Iterar sobre cada una de las salidas de la capa
-    for output in layerOutputs:
-        # Iterar sobre cada una de las detecciones
-        for detection in output:
-            scores = detection[5:]
-            classID = np.argmax(scores)
-            confidence = scores[classID]
-
-            # Filtrar las detecciones para mantener solo la clase 'bicycle'
-            # con una confianza suficientemente alta
-            if CLASSES[classID] == "bicycle" and confidence > detection_threshold:
-                box = detection[0:4] * np.array([W, H, W, H])
-                (centerX, centerY, width, height) = box.astype("int")
-
-                # Usar las coordenadas del centro (x, y) para derivar la parte superior
-                # y la esquina izquierda de la caja delimitadora
-                x = int(centerX - (width / 2))
-                y = int(centerY - (height / 2))
-
-                boxes.append([x, y, int(width), int(height)])
-                confidences.append(float(confidence))
-                classIDs.append(classID)
-
-    # Aplicar supresión de no máximos para suprimir las cajas delimitadoras débiles y superpuestas
-    idxs = cv2.dnn.NMSBoxes(boxes, confidences, detection_threshold, nms_threshold)
+    # Realizar la predicción en el fotograma
+    results = model(frame, verbose=False)
 
     final_boxes = []
-    if len(idxs) > 0:
-        for i in idxs.flatten():
-            (x, y) = (boxes[i][0], boxes[i][1])
-            (w, h) = (boxes[i][2], boxes[i][3])
-            # Devolver en formato (startX, startY, endX, endY) para el tracker
-            final_boxes.append((x, y, x + w, y + h))
+    # Iterar sobre los resultados de la detección
+    for result in results:
+        # Obtener las cajas delimitadoras y las clases
+        boxes = result.boxes
+        for box in boxes:
+            # Obtener la clase y la confianza
+            class_id = int(box.cls[0])
+            confidence = float(box.conf[0])
+            class_name = model.names[class_id]
+
+            # Filtrar por la clase 'bicycle' y el umbral de confianza
+            if class_name == "bicycle" and confidence > detection_threshold:
+                # Obtener coordenadas de la caja delimitadora en formato (x1, y1, x2, y2)
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                final_boxes.append((x1, y1, x2, y2))
 
     return final_boxes
 
@@ -126,14 +93,8 @@ def process_video(video_path, line_coords, detection_threshold):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     line_p1, line_p2 = line_coords
 
-    # Cargar la red YOLO y las clases
-    net = cv2.dnn.readNet(YOLO_WEIGHTS_PATH, YOLO_CONFIG_PATH)
-    with open(YOLO_NAMES_PATH, "r") as f:
-        CLASSES = [line.strip() for line in f.readlines()]
-
-    # Determinar solo los nombres de las capas de SALIDA que necesitamos de YOLO
-    ln = net.getLayerNames()
-    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
+    # Cargar el modelo YOLOv8
+    model = YOLO("yolov8n.pt")
 
     tracker = CentroidTracker(max_disappeared=50, max_distance=75)
     tracked_paths = {}
@@ -147,7 +108,8 @@ def process_video(video_path, line_coords, detection_threshold):
             break
         frame_num += 1
 
-        rects = detect_bicycles(frame, net, ln, CLASSES, detection_threshold)
+        # Usar la nueva función de detección con el modelo YOLOv8
+        rects = detect_bicycles(frame, model, detection_threshold)
         objects = tracker.update(rects)
 
         # Dibujar la línea de conteo principal
