@@ -74,8 +74,20 @@ with st.sidebar:
 # --- Área Principal ---
 st.title("Panel de Control de Conteo de Ciclistas")
 
+# Placeholders for metrics and the main frame
+col1, col2 = st.columns(2)
+with col1:
+    total_count_placeholder = st.empty()
+with col2:
+    current_count_placeholder = st.empty()
+
+st_frame = st.empty()
+
+
 if uploaded_file is None:
     st.warning("Por favor, sube un archivo de video usando el panel de la izquierda para comenzar.")
+    total_count_placeholder.metric("Conteo Total de Ciclistas", "N/A")
+    current_count_placeholder.metric("Ciclistas en Cuadro", "N/A")
 
 if uploaded_file and process_button:
     # Guardar archivo subido a un archivo temporal
@@ -107,7 +119,8 @@ if uploaded_file and process_button:
 
 
     # Crear placeholders para la salida
-    st_frame = st.empty()
+    total_count_placeholder.metric("Conteo Total de Ciclistas", 0)
+    current_count_placeholder.metric("Ciclistas en Cuadro", 0)
     st.markdown("---")
     st.subheader("Registro de Análisis en Tiempo Real")
     log_placeholder = st.empty()
@@ -126,13 +139,17 @@ if uploaded_file and process_button:
 
         log_entries = []
         final_count = 0
-        for frame, count, progress in processor:
+        for frame, total_count, progress, num_in_frame in processor:
             # Actualizar la barra de progreso
             progress_bar.progress(progress)
 
+            # Actualizar métricas
+            total_count_placeholder.metric("Conteo Total de Ciclistas", total_count)
+            current_count_placeholder.metric("Ciclistas en Cuadro", num_in_frame)
+
             # Crear y añadir el registro
             elapsed_time = f"{time.time() - start_time:.2f}s"
-            log_text = f"**Progreso:** {int(progress*100)}% | **Conteo Actual:** {count} | **Tiempo:** {elapsed_time}"
+            log_text = f"**Progreso:** {int(progress*100)}% | **Conteo Total:** {total_count} | **En Cuadro:** {num_in_frame} | **Tiempo:** {elapsed_time}"
             log_entries.insert(0, log_text) # Insertar al principio para orden descendente
 
             # Mostrar los registros
@@ -140,7 +157,7 @@ if uploaded_file and process_button:
 
             # Mostrar el fotograma procesado
             st_frame.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB", use_column_width=True)
-            final_count = count
+            final_count = total_count
 
         end_time = time.time()
         total_time = end_time - start_time

@@ -154,7 +154,10 @@ def process_video(video_path, line_coords, detection_threshold):
             if len(tracked_paths[object_id]) > 1:
                 prev_centroid = tracked_paths[object_id][-2]
 
-                # Comprobar si el trayecto del centroide cruza la línea de conteo
+                # The object counting logic depends on the tracker providing a stable
+                # object ID. The tracker has been updated to use a more robust assignment
+                # algorithm (Hungarian algorithm) to prevent ID switches. This ensures that
+                # each bicycle is counted only once when it crosses the line.
                 if object_id not in counted_ids and do_intersect(prev_centroid, centroid, line_p1, line_p2):
                     bicycle_count += 1
                     counted_ids.add(object_id)
@@ -167,6 +170,6 @@ def process_video(video_path, line_coords, detection_threshold):
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
 
         progress = frame_num / total_frames
-        yield frame, bicycle_count, progress
+        yield frame, bicycle_count, progress, len(objects)
 
     cap.release()

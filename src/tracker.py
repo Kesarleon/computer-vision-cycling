@@ -1,4 +1,6 @@
 import numpy as np
+from scipy.spatial.distance import cdist
+from scipy.optimize import linear_sum_assignment
 
 class CentroidTracker:
     def __init__(self, max_disappeared=50, max_distance=75):
@@ -36,11 +38,11 @@ class CentroidTracker:
                 self.register(input_centroids[i], rects[i])
         else:
             object_ids = list(self.objects.keys())
-            object_centroids = [d['centroid'] for d in self.objects.values()]
+            object_centroids = np.array([d['centroid'] for d in self.objects.values()])
 
-            D = np.linalg.norm(np.array(object_centroids)[:, np.newaxis] - input_centroids, axis=2)
-            rows = D.min(axis=1).argsort()
-            cols = D.argmin(axis=1)[rows]
+            D = cdist(object_centroids, input_centroids)
+
+            rows, cols = linear_sum_assignment(D)
 
             used_rows = set()
             used_cols = set()
