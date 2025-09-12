@@ -3,7 +3,19 @@ import cv2
 import os
 import tempfile
 import time
-from src.video_processing import process_video
+import sys
+from pathlib import Path
+
+# Add src directory to Python path for imports
+src_path = Path(__file__).parent / "src"
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+try:
+    from src.video_processing import process_video
+except ImportError as e:
+    st.error(f"Error importing video processing module: {e}")
+    st.stop()
 
 # --- Interfaz de Streamlit ---
 st.set_page_config(page_title="Análisis de Video: Conteo de Ciclistas", layout="wide", page_icon="🚴")
@@ -103,12 +115,14 @@ if uploaded_file and process_button:
 
     try:
         start_time = time.time()
-
-        processor = process_video(
-            video_path=video_path,
-            line_coords=line_coords,
-            detection_threshold=detection_threshold
-        )
+        
+        # Show initial status
+        with st.spinner("Inicializando modelo YOLOv8... Esto puede tomar unos minutos la primera vez."):
+            processor = process_video(
+                video_path=video_path,
+                line_coords=line_coords,
+                detection_threshold=detection_threshold
+            )
 
         log_entries = []
         final_count = 0

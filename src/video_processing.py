@@ -1,8 +1,24 @@
 import cv2
 import numpy as np
 from collections import deque
-from ultralytics import YOLO
-from src.tracker import CentroidTracker
+import os
+import sys
+from pathlib import Path
+
+try:
+    from ultralytics import YOLO
+except ImportError as e:
+    print(f"Error importing ultralytics: {e}")
+    sys.exit(1)
+
+try:
+    from tracker import CentroidTracker
+except ImportError:
+    try:
+        from src.tracker import CentroidTracker
+    except ImportError as e:
+        print(f"Error importing tracker: {e}")
+        sys.exit(1)
 
 def detect_bicycles(frame, model, detection_threshold):
     """
@@ -93,8 +109,11 @@ def process_video(video_path, line_coords, detection_threshold):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     line_p1, line_p2 = line_coords
 
-    # Cargar el modelo YOLOv8
-    model = YOLO("yolov8n.pt")
+    # Cargar el modelo YOLOv8 with error handling
+    try:
+        model = YOLO("yolov8n.pt")
+    except Exception as e:
+        raise IOError(f"Error loading YOLOv8 model: {e}. Please check your internet connection for first-time model download.")
 
     tracker = CentroidTracker(max_disappeared=50, max_distance=75)
     tracked_paths = {}
